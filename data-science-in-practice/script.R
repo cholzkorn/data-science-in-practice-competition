@@ -1,6 +1,4 @@
-# The dataset contains daily visitor data from a leisure attraction
-# located at the border of two counties in Germany. The task is to predict
-# the column called 'label' for the test set.
+# https://stackoverflow.com/questions/52862458/replace-na-with-grouped-means-in-r
 
 #### DATA DESCRIPTION #########################################################
 
@@ -102,8 +100,7 @@ test <- as.tibble(cbind(test, month = as.factor(month(as.POSIXlt(test[[1]])))))
 #### WEATHER DATA #############################################################
 
 weather
-summary(weather)
-View(weather)
+summary(weather) # Lots of NAs!
 
 # Maybe drop unnecessary columns: wind_Speed_max
 # weather <- weather[ , -which(names(weather) %in% c("wind_speed_max"))]
@@ -116,7 +113,19 @@ nrow(train) == nrow(weather)
 
 weather[1] <- as.Date(weather[[1]], "%Y-%m-%d") # convert to date
 
-# Join dataframes
+
+#### MEAN INJECTION ############################################################
+
+# Creating month variable in the weather df for grouping
+weather <- as.tibble(cbind(weather, month = as.factor(month(as.POSIXlt(weather[[1]])))))
+
+weather <- weather %>%  group_by(month) %>%
+  mutate_all(funs(ifelse(is.na(.), mean(., na.rm = TRUE),.)))
+
+# dropping the month variable again, since we would duplicate it when merging
+weather <- weather[ , -which(names(weather) %in% c("month"))]
+
+#### JOIN DATAFRAMES
 wtrain <- merge(train, weather, by="date")
 wtrain
 
@@ -173,15 +182,11 @@ wtest <- wtest[, -which(names(wtest) %in% c("bank_holiday", "school_holiday", "d
 # And finally add the OH-encoded columns to get our df ready for modeling
 
 mtrain <- as.tibble(cbind(wtrain, oh_school, oh_bank))
-View(mtrain)
 
 
 # Adding empty label for mtest
 
 mtest <- as.tibble(cbind(wtest, oh_schooltst, oh_banktst, label = 0))
-View(mtest)
-
-# Are both now the same length?
 
 
 #### MODELLING ################################################################
@@ -219,9 +224,6 @@ rf_pred <- predict(rf, y_test)
 varImpPlot(rf, type = 1, main ="Accuracy Decrease")
 varImpPlot(rf, type = 2, main = "Gini Decrease")
 
-# replace NA with means
-rf_pred[is.na(rf_pred)] <- median(rf_pred, na.rm=TRUE)
-rf_pred
 
 # Write csv
 
