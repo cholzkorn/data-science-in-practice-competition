@@ -243,6 +243,78 @@ tree_submit <- tibble(date = test$date, visitors=rf_pred)
 tree_submit
 write.csv(tree_submit, file = "tree_submit.csv", row.names = FALSE)
 
-# XGBoost
 
 
+
+
+
+
+
+
+
+#########################
+
+# ---- BOOSTING ----------------------------------------------------------------------------- #
+
+############## Finally, we try to get even better predictions with boosting. For that, we try
+############## a few different models with different settings for the shrinkage factor (eta)
+############## and the maximum depth of the tree (max_depth)
+
+library(xgboost)
+
+# First we set up the folds and the parameter list:
+
+X_train_xgb <- data.matrix(cbind(X_train, label = 0))
+y_train_xgb <- y_train[[1]]
+
+N <- nrow(X_train_xgb)
+fold_number <- sample(1:5, N, replace = TRUE)
+params <- data.frame(eta = rep(c(.05, .1, .3, .5, .7), 5),
+                     max_depth = rep(c(2, 3, 6, 12, 24), rep(5,5)),
+                     )
+
+# Now we apply the preceding algorithm to compute the error for each model and each fold
+# using five folds
+
+error <- matrix(0, nrow = 9, ncol =5)
+for(i in 1:nrow(params)){
+  for (k in 1:5){
+    fold_idx <- (1:N)[fold_number == k]
+    xgb <- xgboost(data = X_train_xgb, label = y_train_xgb,
+                   params = list(eta = params[i, "eta"],
+                                 max_depth = params[i, "max_depth"]),
+                   objective = "reg:linear", nrounds = 200, verbose = 0)
+    pred <- predict(xgb, X_train_xgb)
+    error[i, k] <- mean(y_train_xgb - pred)
+  }
+}
+
+# The errors are stored as a matrix with the models along the rows and folds along
+# the columns.
+
+avg_error <- 100 * rowMeans(error)
+xgb_mdls_errors <- as.tibble(cbind(params, avg_error))
+xgb_mdls_errors_abs <- as.tibble(cbind(params, avg_error_abs = abs(avg_error)))
+
+# We get the smallest error for eta = 0.5 and max_depth = 12
+
+xgb_winner <- arrange(xgb_mdls_errors_abs, avg_error_abs)[1,]
+xgb_winner
+
+# Therefore we now build this model and compute the rmse. Cross-Validation already took place,
+# since the model was fitted on 5 different folds
+
+xgb_finalmodel <- xgboost(data = X_train_xgb, label = y_train_xgb,
+                          objective = "reg:linear", nrounds = 200,
+                          eta = xgb_winner$eta, xgb_winner$max_depth)
+
+# Transform test to data.matrix, so that we can compare the three models. In comparison to
+# the other two models, the errors are smaller and spread out more evenly. Finally, we see
+# that we were able to achieve an even lower RMSE than with the Random Forest.
+
+y_test_xgb <- data.matrix(y_test)
+
+xgb_pred <- predict(xgb_finalmodel, y_test_xgb)
+xgb_submit <- as.tibble(cbind(test$date, xgb_pred))
+
+write.csv(xgb_submit, file = "xgb_submit.csv", row.names = FALSE)
