@@ -2,7 +2,7 @@ rm(list=ls())
 
 # https://stackoverflow.com/questions/52862458/replace-na-with-grouped-means-in-r
 
-# WEEKDAY VARIABLE HINZUFÜGEN!!!
+# notes:
 
 #### DATA DESCRIPTION #########################################################
 
@@ -318,3 +318,36 @@ xgb_pred <- predict(xgb_finalmodel, y_test_xgb)
 xgb_submit <- as.tibble(cbind(test$date, xgb_pred))
 
 write.csv(xgb_submit, file = "xgb_submit.csv", row.names = FALSE)
+
+
+
+
+
+
+# Deep Neural Network using H2O
+
+library(h2o)
+library(caret)
+
+h2o_train <- as.h2o(mtrain)
+h2o_test <- as.h2o(y_test)
+
+h2o_model <- h2o.deeplearning(x = setdiff(names(mtrain), c("label")),
+                              y = "label",
+                              training_frame = h2o_train,
+                              standardize = TRUE,         # standardize data
+                              hidden = c(500, 500, 500, 500, 500, 500),       # 4 layers of 100 nodes each
+                              rate = 0.05,                # learning rate
+                              epochs = 100,               # iterations/runs over data
+                              seed = 1234                 # reproducability seed
+                              )
+
+h2o_pred <- as.data.frame(h2o.predict(h2o_model, h2o_test))
+
+print(h2o_cm <- confusionMatrix(h2o_pred$predict, test$label))
+
+# Submitting predictions
+
+h2o_submit <- as.tibble(cbind(test$date, h2o_pred))
+
+write.csv(h2o_submit, file = "h2o_submit.csv", row.names = FALSE)
