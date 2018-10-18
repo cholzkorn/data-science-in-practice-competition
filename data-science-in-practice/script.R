@@ -89,6 +89,10 @@ library(lubridate)
 train <- as.tibble(cbind(train, month = as.factor(month(as.POSIXlt(train[[1]])))))
 test <- as.tibble(cbind(test, month = as.factor(month(as.POSIXlt(test[[1]])))))
 
+# Addinng weekday row:
+train <- as.tibble(cbind(train, wday = as.factor(weekdays(as.POSIXlt(train[[1]])))))
+test <- as.tibble(cbind(test, wday = as.factor(weekdays(as.POSIXlt(test[[1]])))))
+
 # Checking for outliers in visitor number and seasonal effects
 #ggplot(data=train, aes(x=date, y=label)) +
 #  geom_point() +
@@ -240,4 +244,5 @@ tree_submit
 write.csv(tree_submit, file = "tree_submit.csv", row.names = FALSE)
 
 # XGBoost
+
 
