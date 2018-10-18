@@ -1,0 +1,8 @@
+Try Deep Neural Network!
+
+library(h2o)
+
+https://www.kaggle.com/arathee2/random-forest-vs-xgboost-vs-deep-neural-network
+
+Kaggle winning code:
+http://shujianliu.com/kaggle-winning-code.html
