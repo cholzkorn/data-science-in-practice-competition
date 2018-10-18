@@ -2,8 +2,6 @@ rm(list=ls())
 
 # https://stackoverflow.com/questions/52862458/replace-na-with-grouped-means-in-r
 
-# WEEKDAY VARIABLE HINZUFÜGEN!!!
-
 #### DATA DESCRIPTION #########################################################
 
 # For some features, no description is available, so they may be dummy features
