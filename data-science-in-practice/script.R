@@ -12,16 +12,16 @@ rm(list=ls())
 # provide additional information:
 
 # school holiday
-  # 0 = no school holiday
-  # 1 = school holiday only in county #1
-  # 2 = school holiday only in county #2
-  # 3 = school holiday both in county #1 and in county #2
+# 0 = no school holiday
+# 1 = school holiday only in county #1
+# 2 = school holiday only in county #2
+# 3 = school holiday both in county #1 and in county #2
 
 # bank holiday
-  # 0 = no bank holiday
-  # 1 = bank holiday only in county #1
-  # 2 = bank holiday only in county #2
-  # 3 = bank holiday both in county #1 and in county #2
+# 0 = no bank holiday
+# 1 = bank holiday only in county #1
+# 2 = bank holiday only in county #2
+# 3 = bank holiday both in county #1 and in county #2
 
 # Additionally, daily weather data for the location of the leisure
 # attraction is provided.
@@ -72,8 +72,8 @@ length(test)
 
 # Checking type of date
 # install.packages("date")
-library(date)
-date::is.date(train[1])
+library(lubridate)
+is.Date(train[1])
 
 train[1] <- as.Date(train[[1]], "%Y-%m-%d")
 train[1,1] # earliest date: 2005-03-20
@@ -89,15 +89,22 @@ library(lubridate)
 train <- as.tibble(cbind(train, month = as.factor(month(as.POSIXlt(train[[1]])))))
 test <- as.tibble(cbind(test, month = as.factor(month(as.POSIXlt(test[[1]])))))
 
-# Addinng weekday row:
+# Adding weekday row:
 train <- as.tibble(cbind(train, wday = as.factor(weekdays(as.POSIXlt(train[[1]])))))
 test <- as.tibble(cbind(test, wday = as.factor(weekdays(as.POSIXlt(test[[1]])))))
 
 # Checking for outliers in visitor number and seasonal effects
-#ggplot(data=train, aes(x=date, y=label)) +
-#  geom_point() +
-#  geom_rect(aes(ymin=0, ymax=4000, xmin=train[1],xmax=train[nrow(train), 1],
-#                fill=month), alpha =0.007)
+ggplot(data=train, aes(x=date, y=label)) +
+  geom_point() +
+  theme(legend.position = "none") +
+  geom_rect(aes(ymin=0, ymax=4000, xmin=train[1],xmax=train[nrow(train), 1],
+                fill=month), alpha =0.007) +
+  scale_fill_manual(name = "Legende", 
+                    values = c("blue", "blue", "green", "green", "green",
+                               "yellow", "yellow", "yellow", "brown", "brown", "brown", "blue")) +
+  labs(title="Saisonalit?t der Besucherzahlen",
+       y="Besucherzahlen", x="Zeit", caption="Blau = Winter, Gelb = Sommer") +
+  geom_point()
 
 # There seems to be a seasonal effect, so we will keep month in the DF
 
@@ -167,6 +174,8 @@ oh_school <- as.tibble(model.matrix(~ school_f))
 colnames(oh_school) <- c("school_holiday_0", "school_holiday_1", "school_holiday_2", "school_holiday_3")
 
 oh_bank <- as.tibble(model.matrix(~ bank_f))
+
+oh_bank <- cbind(oh_bank)
 colnames(oh_bank) <- c("bank_holiday_0", "bank_holiday_2", "bank_holiday_3")
 
 # For test
@@ -175,9 +184,11 @@ school_ftst <- as.factor(wtest$school_holiday)
 bank_ftst <- as.factor(wtest$bank_holiday)
 
 oh_schooltst <- as.tibble(model.matrix(~ school_ftst))
+
 colnames(oh_schooltst) <- c("school_holiday_0", "school_holiday_1", "school_holiday_2", "school_holiday_3")
 
 oh_banktst <- as.tibble(model.matrix(~ bank_ftst))
+
 colnames(oh_banktst) <- c("bank_holiday_0", "bank_holiday_2", "bank_holiday_3")
 
 
@@ -218,15 +229,14 @@ lmodel <- lm(mtrain$label ~ ., data=mtrain)
 summary(lmodel)
 
 lmodel2 <- lm(mtrain$label ~ mtrain$month + mtrain$school_holiday_3 +
-              mtrain$school_holiday_1 + mtrain$feature_0 +
-              mtrain$air_temperature_daily_max, data=mtrain)
+                mtrain$school_holiday_1 + mtrain$feature_0 +
+                mtrain$air_temperature_daily_max, data=mtrain)
 
 lm_pred <- predict(lmodel2, y_test)
 
 
 #### RANDOM FOREST
 
-#install.packages("randomForest")
 library(randomForest)
 
 rf <- randomForest(mtrain$label ~ ., data=mtrain, importance=TRUE)
@@ -270,20 +280,20 @@ y_train_xgb <- y_train[[1]]
 N <- nrow(X_train_xgb)
 fold_number <- sample(1:5, N, replace = TRUE)
 params <- data.frame(eta = rep(c(.05, .1, .3, .5, .7), 5),
-                     max_depth = rep(c(2, 3, 6, 12, 24), rep(5,5)),
-                     )
+                     max_depth = rep(c(2, 3, 6, 12, 24), rep(5,5))
+)
 
 # Now we apply the preceding algorithm to compute the error for each model and each fold
 # using five folds
 
-error <- matrix(0, nrow = 9, ncol =5)
+error <- matrix(0, nrow = 25, ncol =5)
 for(i in 1:nrow(params)){
   for (k in 1:5){
     fold_idx <- (1:N)[fold_number == k]
     xgb <- xgboost(data = X_train_xgb, label = y_train_xgb,
                    params = list(eta = params[i, "eta"],
                                  max_depth = params[i, "max_depth"]),
-                   objective = "reg:linear", nrounds = 200, verbose = 0)
+                   objective = "reg:linear", nrounds = 100, verbose = 0)
     pred <- predict(xgb, X_train_xgb)
     error[i, k] <- mean(y_train_xgb - pred)
   }
@@ -301,16 +311,13 @@ xgb_mdls_errors_abs <- as.tibble(cbind(params, avg_error_abs = abs(avg_error)))
 xgb_winner <- arrange(xgb_mdls_errors_abs, avg_error_abs)[1,]
 xgb_winner
 
-# Therefore we now build this model and compute the rmse. Cross-Validation already took place,
-# since the model was fitted on 5 different folds
+# Therefore we now build this model and compute the rmse.
 
 xgb_finalmodel <- xgboost(data = X_train_xgb, label = y_train_xgb,
-                          objective = "reg:linear", nrounds = 200,
+                          objective = "reg:linear", nrounds = 100,
                           eta = xgb_winner$eta, xgb_winner$max_depth)
 
-# Transform test to data.matrix, so that we can compare the three models. In comparison to
-# the other two models, the errors are smaller and spread out more evenly. Finally, we see
-# that we were able to achieve an even lower RMSE than with the Random Forest.
+# Transform test to data.matrix, so that we can compare the three models.
 
 y_test_xgb <- data.matrix(y_test)
 
@@ -320,14 +327,12 @@ xgb_submit <- as.tibble(cbind(test$date, xgb_pred))
 write.csv(xgb_submit, file = "xgb_submit.csv", row.names = FALSE)
 
 
-
-
-
-
 # Deep Neural Network using H2O
 
 library(h2o)
 library(caret)
+
+h2o.init()
 
 h2o_train <- as.h2o(mtrain)
 h2o_test <- as.h2o(y_test)
@@ -336,11 +341,11 @@ h2o_model <- h2o.deeplearning(x = setdiff(names(mtrain), c("label")),
                               y = "label",
                               training_frame = h2o_train,
                               standardize = TRUE,         # standardize data
-                              hidden = c(500, 500, 500, 500, 500, 500),       # 4 layers of 100 nodes each
-                              rate = 0.05,                # learning rate
-                              epochs = 100,               # iterations/runs over data
+                              hidden = c(100, 100, 100, 100),       # 4 layers of 100 nodes each
+                              rate = 0.01,                # learning rate
+                              epochs = 200,               # iterations/runs over data
                               seed = 1234                 # reproducability seed
-                              )
+)
 
 h2o_pred <- as.data.frame(h2o.predict(h2o_model, h2o_test))
 
@@ -351,3 +356,69 @@ print(h2o_cm <- confusionMatrix(h2o_pred$predict, test$label))
 h2o_submit <- as.tibble(cbind(test$date, h2o_pred))
 
 write.csv(h2o_submit, file = "h2o_submit.csv", row.names = FALSE)
+
+
+
+
+# PLOT DIFFERENCES
+
+colors    <- c( "c1" = "blue", "c2" = "red" )
+
+ggplot(data = test, aes(x = test$date)) +
+  geom_point(aes(y = rf_pred, color="c1")) +
+  geom_point(aes(y = xgb_pred, color="c2")) +
+  labs(y="visitors", x="time") +
+  scale_color_manual(name = "Model", 
+                     breaks = c("c1", "c2"), 
+                     values = colors,
+                     labels = c("RF", "XGB")) +
+  theme(legend.position = "top")
+
+# Mixing models: random forest and h2o
+
+mix <- (rf_pred + h2o_pred) / 2
+
+mix_submit <- as.tibble(cbind(date = test$date, visitors = mix))
+write.csv(mix_submit, file = "mix.csv", row.names = FALSE)
+
+# BEST SCORE UNTIL NOW! Mixing models: random forest and xgb
+
+mix <- (rf_pred + xgb_pred) / 2
+
+mix_submit <- as.tibble(cbind(date = test$date, visitors = mix))
+write.csv(mix_submit, file = "mix.csv", row.names = FALSE)
+
+
+
+# Combination 3
+
+
+mix3 <- (rf_pred + ((h2o_pred + xgb_pred)/2)) / 2
+
+mix3_submit <- as.tibble(cbind(date = test$date, visitors = mix3))
+write.csv(mix3_submit, file = "mix3.csv", row.names = FALSE)
+
+
+# Weighted combination
+
+library(matrixStats)
+
+pred_mx <- as.matrix(cbind(rf_pred, xgb_pred, h2o_pred))
+
+weighted_mix <- rowWeightedMeans(pred_mx, w = c(1, 0.35, 0.45), rows = NULL)
+
+weighted_submit <- as.tibble(cbind(date = test$date, visitors = weighted_mix))
+
+write.csv(weighted_submit, file = "weighted_submit.csv", row.names = FALSE)
+
+
+# Rescaling
+library(scales)
+
+mix_re <- as.tibble(read.csv("mix.csv"))
+
+train_range <- range(train$label)
+
+mix_re$visitors <- rescale(mix_re$visitors, to=c(280, 3200))
+
+write.csv(mix_re, file = "mix_re.csv", row.names = FALSE)
